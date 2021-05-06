@@ -22,17 +22,13 @@ func Delete(path string, parallel int) error {
 	if err != nil {
 		return err
 	}
-	relativePaths, err := GetListOfFiles(client, prefix, path)
+
+	filePaths, err := GetPaths(client, prefix, path)
 	if err != nil {
 		return err
 	}
 
-	var absolutePaths []string
-	for _, relativePath := range relativePaths {
-		absolutePaths = append(absolutePaths, filepath.Join(path, relativePath))
-	}
-
-	err = PerformDelete(client, prefix, absolutePaths, parallel)
+	err = PerformDelete(client, prefix, filePaths, parallel)
 	if err != nil {
 		return err
 	}
@@ -52,6 +48,22 @@ func TestImplementationsExistForDelete(prefix string) error {
 	}
 
 	return nil
+}
+
+// GetPaths gets absolute path of all files present in path
+func GetPaths(client interface{}, prefix, path string) ([]string, error) {
+
+	fileNames, err := GetListOfFiles(client, prefix, path)
+	if err != nil {
+		return nil, err
+	}
+
+	var filePaths []string
+	for _, fileName := range fileNames {
+		filePaths = append(filePaths, filepath.Join(path, fileName))
+	}
+
+	return filePaths, nil
 }
 
 // GetClient gets the client for cloud service provider
