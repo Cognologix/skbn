@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"path/filepath"
 
 	"github.com/Cognologix/skbn/pkg/utils"
 )
@@ -23,10 +22,12 @@ func Delete(path string, parallel int) error {
 		return err
 	}
 
-	filePaths, err := GetPaths(client, prefix, path)
+	fileNames, err := GetFileNames(client, prefix, path)
 	if err != nil {
 		return err
 	}
+
+	filePaths := GetPaths(path, fileNames)
 
 	err = PerformDelete(client, prefix, filePaths, parallel)
 	if err != nil {
@@ -48,22 +49,6 @@ func TestImplementationsExistForDelete(prefix string) error {
 	}
 
 	return nil
-}
-
-// GetPaths gets absolute path of all files present in path
-func GetPaths(client interface{}, prefix, path string) ([]string, error) {
-
-	fileNames, err := GetListOfFiles(client, prefix, path)
-	if err != nil {
-		return nil, err
-	}
-
-	var filePaths []string
-	for _, fileName := range fileNames {
-		filePaths = append(filePaths, filepath.Join(path, fileName))
-	}
-
-	return filePaths, nil
 }
 
 // GetClient gets the client for cloud service provider

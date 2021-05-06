@@ -55,3 +55,39 @@ func LeftPad2Len(num, padNum, overallLen int) string {
 func Sleep(seconds int) {
 	time.Sleep(time.Duration(seconds) * time.Second)
 }
+
+//Intersection returns intersection of 2 string slices
+func Intersection(a, b []string) []string {
+	set := make([]string, 0)
+	hash := make(map[string]bool)
+
+	for _, el := range a {
+		hash[el] = true
+	}
+
+	for _, el := range b {
+		if _, found := hash[el]; found {
+			set = append(set, el)
+		}
+	}
+
+	return set
+}
+
+//Outersection returns extra strings present in outerSet compared to innerSet
+func Outersection(outerSet, innerSet []string) []string {
+	set := make([]string, 0)
+	hash := make(map[string]bool)
+
+	for _, el := range innerSet {
+		hash[el] = true
+	}
+
+	for _, el := range outerSet {
+		if _, found := hash[el]; !found {
+			set = append(set, el)
+		}
+	}
+
+	return set
+}

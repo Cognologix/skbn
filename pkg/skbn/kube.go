@@ -94,7 +94,7 @@ func GetListOfFilesFromK8s(iClient interface{}, path, findType, findName string)
 		var outLines []string
 		for _, line := range lines {
 			if line != "" {
-				outLines = append(outLines, strings.Replace(line, findPath, "", 1))
+				outLines = append(outLines, filepath.Base(line))
 			}
 		}
 
