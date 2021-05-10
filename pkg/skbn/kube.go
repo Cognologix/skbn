@@ -24,6 +24,10 @@ type K8sClient struct {
 	Config    *rest.Config
 }
 
+type K8sFile struct {
+	name, eTag string
+}
+
 // GetClientToK8s returns a k8sClient
 func GetClientToK8s() (*K8sClient, error) {
 	var kubeconfig string
@@ -99,6 +103,53 @@ func GetListOfFilesFromK8s(iClient interface{}, path, findType, findName string)
 		}
 
 		return outLines, nil
+	}
+
+	return nil, nil
+}
+
+// GetListOfFilesFromK8sV2 gets list of files in path from Kubernetes (recursive)
+func GetListOfFilesFromK8sV2(iClient interface{}, path, findType, findName string) (map[string]*K8sFile, error) {
+	client := *iClient.(*K8sClient)
+	pSplit := strings.Split(path, "/")
+	if err := validateK8sPath(pSplit); err != nil {
+		return nil, err
+	}
+	namespace, podName, containerName, findPath := initK8sVariables(pSplit)
+	command := []string{"find", findPath, "-type", findType, "-name", findName}
+
+	attempts := 3
+	attempt := 0
+	for attempt < attempts {
+		attempt++
+
+		output := new(bytes.Buffer)
+		stderr, err := Exec(client, namespace, podName, containerName, command, nil, output)
+		if len(stderr) != 0 {
+			if attempt == attempts {
+				return nil, fmt.Errorf("STDERR: " + (string)(stderr))
+			}
+			utils.Sleep(attempt)
+			continue
+		}
+		if err != nil {
+			if attempt == attempts {
+				return nil, err
+			}
+			utils.Sleep(attempt)
+			continue
+		}
+
+		lines := strings.Split(output.String(), "\n")
+		k8sFiles := make(map[string]*K8sFile)
+		for _, line := range lines {
+			if line != "" {
+				name := filepath.Base(line)
+				k8sFiles[name] = &K8sFile{name: filepath.Base(line)}
+			}
+		}
+
+		return k8sFiles, nil
 	}
 
 	return nil, nil
@@ -313,6 +364,46 @@ func DeleteFromK8s(iClient interface{}, path string) error {
 			return nil
 		}
 		utils.Sleep(attempt)
+	}
+
+	return nil
+}
+
+func SetFileETag(iClient interface{}, path string, files map[string]*K8sFile) error {
+	client := *iClient.(*K8sClient)
+	pSplit := strings.Split(path, "/")
+	if err := validateK8sPath(pSplit); err != nil {
+		return err
+	}
+	namespace, podName, containerName, dirPath := initK8sVariables(pSplit)
+	for _, file := range files {
+		fileAbsolutePath := dirPath + "/" + file.name
+		command := []string{"md5sum", fileAbsolutePath}
+
+		attempts := 3
+		attempt := 0
+		for attempt < attempts {
+			attempt++
+
+			output := new(bytes.Buffer)
+			stderr, err := Exec(client, namespace, podName, containerName, command, nil, output)
+			if len(stderr) != 0 {
+				if attempt == attempts {
+					return fmt.Errorf("STDERR: " + (string)(stderr))
+				}
+				utils.Sleep(attempt)
+				continue
+			}
+			if err != nil {
+				if attempt == attempts {
+					return err
+				}
+				utils.Sleep(attempt)
+				continue
+			}
+			md5 := strings.Fields(output.String())[0]
+			file.eTag = md5
+		}
 	}
 
 	return nil

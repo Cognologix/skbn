@@ -33,26 +33,16 @@ func Sync(src, dst string, parallel int, bufferSize float64) error {
 // TestImplementationsExistForSync checks that implementations exist for the desired action
 func TestImplementationsExistForSync(srcPrefix, dstPrefix string) error {
 	//For now sync is allowed only from S3 to K8s
-
-	/*TODO: Update the logic
-	  Keep only one switch case for src and check destination for each case
-	*/
 	switch srcPrefix {
 	//case "k8s":
 	case "s3":
+		if dstPrefix != "k8s" {
+			return fmt.Errorf(srcPrefix + "-->" + dstPrefix + " not implemented")
+		}
 	//case "abs":
 	//case "gcs":
 	default:
 		return fmt.Errorf(srcPrefix + " not implemented")
-	}
-
-	switch dstPrefix {
-	case "k8s":
-	//case "s3":
-	//case "abs":
-	//case "gcs":
-	default:
-		return fmt.Errorf(dstPrefix + " not implemented")
 	}
 
 	return nil
@@ -62,28 +52,18 @@ func TestImplementationsExistForSync(srcPrefix, dstPrefix string) error {
 func PerformSync(srcClient, dstClient interface{}, srcPrefix, dstPrefix, srcPath, dstPath string,
 	parallel int, bufferSize float64) error {
 
-	//Get all files from source
-	srcFileNames, err := GetFileNames(srcClient, srcPrefix, srcPath)
-	if err != nil {
-		return err
+	var copyFilePaths []FromToPair
+	var deleteFilePaths []string
+	var err error
+	if srcPrefix == S3 && dstPrefix == K8S {
+		copyFilePaths, deleteFilePaths, err = S3ToK8s(srcClient, dstClient,
+			srcPath, dstPath, parallel, bufferSize)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf(srcPrefix + "-->" + dstPrefix + " not implemented")
 	}
-
-	//Get all files from destination
-	dstFileNames, err := GetFileNames(dstClient, dstPrefix, dstPath)
-	if err != nil {
-		return err
-	}
-
-	//find file intersection
-	fileIntersection := utils.Intersection(srcFileNames, dstFileNames)
-
-	//Find file which needs to be copied from source to destination
-	copyFileNames := utils.Outersection(srcFileNames, fileIntersection)
-	copyFilePaths := GetFromToPaths(srcPath, dstPath, copyFileNames)
-
-	//Find file which needs to be deleted from destination
-	delFileNames := utils.Outersection(dstFileNames, fileIntersection)
-	delFilePaths := GetPaths(dstPath, delFileNames)
 
 	//Copy files
 	err = PerformCopy(srcClient, dstClient, srcPrefix, dstPrefix, copyFilePaths, parallel, bufferSize)
@@ -92,12 +72,57 @@ func PerformSync(srcClient, dstClient interface{}, srcPrefix, dstPrefix, srcPath
 	}
 
 	//Delete files
-	err = PerformDelete(dstClient, dstPrefix, delFilePaths, parallel)
+	err = PerformDelete(dstClient, dstPrefix, deleteFilePaths, parallel)
 	if err != nil {
 		return err
 	}
 
-	//Check sum to verify source and destination are in sync
-
 	return nil
+}
+
+func S3ToK8s(srcClient, dstClient interface{}, srcPath, dstPath string,
+	parallel int, bufferSize float64) ([]FromToPair, []string, error) {
+
+	srcFileObjs, err := GetListOfFilesFromS3V2(srcClient, srcPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dstFileObjs, err := GetListOfFilesFromK8sV2(dstClient, dstPath, "f", "*")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = SetFileETag(dstClient, dstPath, dstFileObjs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var copyFileNames []string
+	var deleteFileNames []string
+
+	//Collect files to copy
+	for _, srcFile := range srcFileObjs {
+		if _, ok := dstFileObjs[srcFile.name]; !ok {
+			fmt.Println("Checking by file name")
+			copyFileNames = append(copyFileNames, srcFile.name)
+		} else {
+			if srcFile.eTag != dstFileObjs[srcFile.name].eTag {
+				fmt.Println("src etag:", srcFile.eTag)
+				fmt.Println("dst etag:", dstFileObjs[srcFile.name].eTag)
+				copyFileNames = append(copyFileNames, srcFile.name)
+			}
+		}
+	}
+
+	//collect extra files to delete from destination
+	for _, dstFile := range dstFileObjs {
+		if _, ok := srcFileObjs[dstFile.name]; !ok {
+			deleteFileNames = append(deleteFileNames, dstFile.name)
+		}
+	}
+	copyFilePaths := GetFromToPaths(srcPath, dstPath, copyFileNames)
+	deleteFilePaths := GetPaths(dstPath, deleteFileNames)
+
+	return copyFilePaths, deleteFilePaths, nil
 }

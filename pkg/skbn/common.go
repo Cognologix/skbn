@@ -1,6 +1,13 @@
 package skbn
 
-import "path/filepath"
+import (
+	"path/filepath"
+)
+
+const (
+	S3  string = "s3"
+	K8S string = "k8s"
+)
 
 //GetFileNames returns all file nams present at path
 func GetFileNames(client interface{}, prefix, path string) ([]string, error) {
