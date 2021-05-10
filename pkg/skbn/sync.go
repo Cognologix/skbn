@@ -113,7 +113,6 @@ func S3ToK8s(srcClient, dstClient interface{}, srcPath, dstPath string,
 	//Collect files to copy
 	for _, srcFile := range srcFileObjs {
 		if _, ok := dstFileObjs[srcFile.name]; !ok {
-			fmt.Println("Checking by file name")
 			copyFileNames = append(copyFileNames, srcFile.name)
 		} else {
 			if srcFile.eTag != dstFileObjs[srcFile.name].eTag {
@@ -158,7 +157,6 @@ func K8sToS3(srcClient, dstClient interface{}, srcPath, dstPath string,
 	//Collect files to copy
 	for _, srcFile := range srcFileObjs {
 		if _, ok := dstFileObjs[srcFile.name]; !ok {
-			fmt.Println("Checking by file name")
 			copyFileNames = append(copyFileNames, srcFile.name)
 		} else {
 			if srcFile.eTag != dstFileObjs[srcFile.name].eTag {

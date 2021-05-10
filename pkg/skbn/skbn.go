@@ -150,17 +150,20 @@ func PerformCopy(srcClient, dstClient interface{}, srcPrefix, dstPrefix string, 
 			}()
 		}(srcClient, dstClient, srcPrefix, ftp.FromPath, dstPrefix, ftp.ToPath, currentLinePadded, totalFiles)
 	}
-	bwg.Wait()
 	if len(errc) != 0 {
 		// This is not exactly the correct behavior
 		// There may be more than 1 error in the channel
 		// But first let's make it work
 		err := <-errc
-		close(errc)
+		/*if we close the channel it may crash because
+		some goroutines will try to put error in closed channel
+		Need netter way to handle this
+		close(errc)*/
 		if err != nil {
 			return err
 		}
 	}
+	bwg.Wait()
 	return nil
 }
 
