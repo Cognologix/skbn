@@ -103,6 +103,10 @@ func GetListOfFilesFromS3V2(iClient interface{}, path string) (map[string]*S3Fil
 	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
 		for _, obj := range p.Contents {
 			name := strings.Replace(*obj.Key, s3Path, "", 1)
+			name = strings.Trim(name, "/")
+			if name == "" {
+				continue
+			}
 			eTag := strings.Trim(*obj.ETag, "\"")
 			s3Files[name] = &S3File{name, eTag}
 		}
