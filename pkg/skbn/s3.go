@@ -16,6 +16,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
+type S3File struct {
+	name, eTag string
+}
+
 // GetClientToS3 checks the connection to S3 and returns the tested client
 func GetClientToS3(path string) (*session.Session, error) {
 	pSplit := strings.Split(path, "/")
@@ -77,6 +81,42 @@ func GetListOfFilesFromS3(iClient interface{}, path string) ([]string, error) {
 	}
 
 	return outLines, nil
+}
+
+// GetListOfFilesFromS3 gets list of files in path from S3 (recursive)
+/*TODO: GetListOfFilesFromS3 and GetListOfFilesFromS3V2 are same functions with some minor change
+GetListOfFilesFromS3 is needed for copy and GetListOfFilesFromS3V2 is needed for sync
+remove GetListOfFilesFromS3 and use GetListOfFilesFromS3V2 for copy also.
+*/
+func GetListOfFilesFromS3V2(iClient interface{}, path string) (map[string]*S3File, error) {
+	s := iClient.(*session.Session)
+	pSplit := strings.Split(path, "/")
+	if err := validateS3Path(pSplit); err != nil {
+		return nil, err
+	}
+	bucket, s3Path := initS3Variables(pSplit)
+
+	s3Files := make(map[string]*S3File)
+	err := s3.New(s).ListObjectsPages(&s3.ListObjectsInput{
+		Bucket: aws.String(bucket),
+		Prefix: aws.String(s3Path),
+	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
+		for _, obj := range p.Contents {
+			name := strings.Replace(*obj.Key, s3Path, "", 1)
+			name = strings.Trim(name, "/")
+			if name == "" {
+				continue
+			}
+			eTag := strings.Trim(*obj.ETag, "\"")
+			s3Files[name] = &S3File{name, eTag}
+		}
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return s3Files, nil
 }
 
 // DownloadFromS3 downloads a single file from S3

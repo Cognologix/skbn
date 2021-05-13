@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"math"
-	"path/filepath"
 
 	"github.com/Cognologix/skbn/pkg/utils"
 
@@ -33,10 +32,14 @@ func Copy(src, dst string, parallel int, bufferSize float64) error {
 	if err != nil {
 		return err
 	}
-	fromToPaths, err := GetFromToPaths(srcClient, srcPrefix, srcPath, dstPath)
+
+	relativePaths, err := GetListOfFiles(srcClient, srcPrefix, srcPath)
 	if err != nil {
 		return err
 	}
+
+	fromToPaths := GetFromToPaths(srcPath, dstPath, relativePaths)
+
 	err = PerformCopy(srcClient, dstClient, srcPrefix, dstPrefix, fromToPaths, parallel, bufferSize)
 	if err != nil {
 		return err
@@ -83,23 +86,6 @@ func GetClients(srcPrefix, dstPrefix, srcPath, dstPath string) (interface{}, int
 	}
 
 	return srcClient, dstClient, nil
-}
-
-// GetFromToPaths gets from and to paths to perform the copy on
-func GetFromToPaths(srcClient interface{}, srcPrefix, srcPath, dstPath string) ([]FromToPair, error) {
-	relativePaths, err := GetListOfFiles(srcClient, srcPrefix, srcPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var fromToPaths []FromToPair
-	for _, relativePath := range relativePaths {
-		fromPath := filepath.Join(srcPath, relativePath)
-		toPath := filepath.Join(dstPath, relativePath)
-		fromToPaths = append(fromToPaths, FromToPair{FromPath: fromPath, ToPath: toPath})
-	}
-
-	return fromToPaths, nil
 }
 
 // PerformCopy performs the actual copy action
@@ -164,17 +150,20 @@ func PerformCopy(srcClient, dstClient interface{}, srcPrefix, dstPrefix string, 
 			}()
 		}(srcClient, dstClient, srcPrefix, ftp.FromPath, dstPrefix, ftp.ToPath, currentLinePadded, totalFiles)
 	}
-	bwg.Wait()
 	if len(errc) != 0 {
 		// This is not exactly the correct behavior
 		// There may be more than 1 error in the channel
 		// But first let's make it work
 		err := <-errc
-		close(errc)
+		/*if we close the channel it may crash because
+		some goroutines will try to put error in closed channel
+		Need netter way to handle this
+		close(errc)*/
 		if err != nil {
 			return err
 		}
 	}
+	bwg.Wait()
 	return nil
 }
 
