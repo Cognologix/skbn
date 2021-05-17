@@ -71,8 +71,13 @@ func GetListOfFilesFromS3(iClient interface{}, path string) ([]string, error) {
 		Prefix: aws.String(s3Path),
 	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
 		for _, obj := range p.Contents {
-			line := *obj.Key
-			outLines = append(outLines, strings.Replace(line, s3Path, "", 1))
+			name := strings.Replace(*obj.Key, s3Path, "", 1)
+			name = strings.Trim(name, "/")
+			if name == "" {
+				continue
+			}
+			outLines = append(outLines, name)
+
 		}
 		return true
 	})

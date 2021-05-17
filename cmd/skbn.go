@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -10,6 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+const longDesc string = `Only multi file support is available.
+So provide only directories in input.
+If single file is provided in input then operation will not perform as per expectations.`
 
 func main() {
 	cmd := NewRootCmd(os.Args[1:])
@@ -22,14 +25,15 @@ func main() {
 func NewRootCmd(args []string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skbn",
-		Short: "",
-		Long:  ``,
+		Short: "Tool to perform file operations across different cloud platforms.",
+		Long:  longDesc,
 	}
 
 	out := cmd.OutOrStdout()
 
 	cmd.AddCommand(NewCpCmd(out))
-	cmd.AddCommand(NewVersionCmd(out))
+	cmd.AddCommand(NewSyncCmd(out))
+	cmd.AddCommand(NewRmCmd(out))
 
 	return cmd
 }
@@ -39,6 +43,22 @@ type cpCmd struct {
 	dst        string
 	parallel   int
 	bufferSize float64
+
+	out io.Writer
+}
+
+type syncCmd struct {
+	src        string
+	dst        string
+	parallel   int
+	bufferSize float64
+
+	out io.Writer
+}
+
+type rmCmd struct {
+	path     string
+	parallel int
 
 	out io.Writer
 }
@@ -70,23 +90,53 @@ func NewCpCmd(out io.Writer) *cobra.Command {
 	return cmd
 }
 
-var (
-	// GitTag stands for a git tag
-	GitTag string
-	// GitCommit stands for a git commit hash
-	GitCommit string
-)
+// NewSyncCmd represents the sync command
+func NewSyncCmd(out io.Writer) *cobra.Command {
+	c := &syncCmd{out: out}
 
-// NewVersionCmd prints version information
-func NewVersionCmd(out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "version",
-		Short: "Print version information",
+		Use:   "sync",
+		Short: "Sync files between Kubernetes and S3",
 		Long:  ``,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Version %s (git-%s)\n", GitTag, GitCommit)
+			if err := skbn.Sync(c.src, c.dst, c.parallel, c.bufferSize); err != nil {
+				log.Fatal(err)
+			}
 		},
 	}
+	f := cmd.Flags()
+
+	f.StringVar(&c.src, "src", "", "path to sync from. Example: k8s://<namespace>/<podName>/<containerName>/path/to/sync/from")
+	f.StringVar(&c.dst, "dst", "", "path to sync to. Example: s3://<bucketName>/path/to/sync/to")
+	f.IntVarP(&c.parallel, "parallel", "p", 1, "number of files to copy in parallel. set this flag to 0 for full parallelism")
+	f.Float64VarP(&c.bufferSize, "buffer-size", "b", 6.75, "in memory buffer size (MB) to use for files copy (buffer per file)")
+
+	cmd.MarkFlagRequired("src")
+	cmd.MarkFlagRequired("dst")
+
+	return cmd
+}
+
+// NewRmCmd represents the remove command
+func NewRmCmd(out io.Writer) *cobra.Command {
+	c := &rmCmd{out: out}
+
+	cmd := &cobra.Command{
+		Use:   "rm",
+		Short: "Delete all files from path. Provide filename in path to delete specific file.",
+		Long:  ``,
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := skbn.Delete(c.path, c.parallel); err != nil {
+				log.Fatal(err)
+			}
+		},
+	}
+	f := cmd.Flags()
+
+	f.StringVar(&c.path, "path", "", "path to delete from. Example: k8s://<namespace>/<podName>/<containerName>/path/to/sync/from")
+	f.IntVarP(&c.parallel, "parallel", "p", 1, "number of files to copy in parallel. set this flag to 0 for full parallelism")
+
+	cmd.MarkFlagRequired("path")
 
 	return cmd
 }
