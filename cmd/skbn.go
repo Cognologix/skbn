@@ -10,6 +10,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const longDesc string = `Only multi file support is available.
+So provide only directories in input.
+If single file is provided in input then operation will not perform as per expectations.`
+
 func main() {
 	cmd := NewRootCmd(os.Args[1:])
 	if err := cmd.Execute(); err != nil {
@@ -21,8 +25,8 @@ func main() {
 func NewRootCmd(args []string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skbn",
-		Short: "",
-		Long:  ``,
+		Short: "Tool to perform file operations across different cloud platforms.",
+		Long:  longDesc,
 	}
 
 	out := cmd.OutOrStdout()
